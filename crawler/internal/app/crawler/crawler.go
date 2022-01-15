@@ -2,7 +2,7 @@ package crawler
 
 import (
 	//"github.com/Elderly-AI/ta_eos/internal/pkg/calculations"
-	pb "github.com/Elderly-AI/observer/crawler/pkg/proto/crawler"
+	pb "github.com/"
 )
 
 type CrawlerImplementation struct {
