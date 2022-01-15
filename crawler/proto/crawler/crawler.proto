@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package crawler;
+
+import "google/api/annotations.proto";
+
+// Defines the import path that should be used to import the generated package
+// and the package name
+option go_package = "github.com/Elderly-AI/observer/crawler/proto/crawler;crawler";
+
+// Here is the overall crawler service definition with all endpoints
+service Crawler {
+  rpc GetVkUsersPhotosHandler (GetVkUsersPhotosHandlerRequest) returns (GetVkUsersPhotosHandlerResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/crawler/vk/{user_id}"
+      body: "*"
+    };
+  }
+}
+
+message GetVkUsersPhotosHandlerRequest {
+  repeated uint64 users = 1;
+};
+
+message GetVkUsersPhotosHandlerResponse {
+  message UserPhotos {
+    repeated bytes photos = 1;
+  }
+  repeated UserPhotos photos = 1;
+};
