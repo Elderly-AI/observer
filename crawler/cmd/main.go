@@ -8,12 +8,14 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
+
+	crawler "github.com/Elderly-AI/observer/crawler/internal/app/crawler"
+	pbCrawler "github.com/Elderly-AI/observer/crawler/pkg/proto/crawler"
 )
 
 func registerServices(s *grpc.Server) {
-	//authRepo := db.CreateRepo(opts.PosgtresConnection)
-	//authDelivery := auth.NewAuthHandler(authRepo, opts.SessionStore)
-	//pbAuth.RegisterAuthServer(s, &authDelivery)
+	crawlerImplementation := crawler.New()
+	pbCrawler.RegisterCrawlerServer(s, &crawlerImplementation)
 }
 
 func newGateway(ctx context.Context, conn *grpc.ClientConn, opts []runtime.ServeMuxOption) (http.Handler, error) {
