@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"github.com/go-vk-api/vk"
 	"log"
 	"net"
 	"net/http"
 
+	"github.com/go-vk-api/vk"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 
@@ -16,7 +16,9 @@ import (
 )
 
 func registerServices(s *grpc.Server) {
-	vkClient, err := vk.NewClient()
+	vkClient, err := vk.NewClientWithOptions(
+		vk.WithToken(""),
+	)
 	if err != nil {
 		log.Fatalln("Failed to init vk client:", err)
 	}
@@ -62,8 +64,9 @@ func main() {
 		log.Fatalln("Failed to listen:", err)
 	}
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(grpc.MaxSendMsgSize(1024 * 1024 * 1024))
 	registerServices(s)
+
 	log.Println("Serving gRPC on 0.0.0.0:8080")
 	log.Fatalln(s.Serve(lis))
 }

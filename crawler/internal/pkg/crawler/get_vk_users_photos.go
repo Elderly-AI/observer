@@ -15,7 +15,6 @@ import (
 
 const MaxVkUsersCountRequest = 75
 const MaxVkUserRequestBatchSize = 25
-const MaxVkUsersRequestBatchCount = 3
 
 // TODO обернуть в либку
 const code = ` 
@@ -30,8 +29,10 @@ while (id_cnt < user_id_arr.length) {
 
     while (photo_cnt < photos.count) {
     	var index = (photos.items[photo_cnt].sizes@.type).indexOf("z");
-		user_photos.photos.push(photos.items[photo_cnt].sizes[index].url);
-    	photo_cnt = photo_cnt + 1;
+		if (index != -1) {
+			user_photos.photos.push(photos.items[photo_cnt].sizes[index].url);
+		}	
+		photo_cnt = photo_cnt + 1;
     }
 
     users_photos.push(user_photos);
@@ -127,7 +128,7 @@ func getVkUsersRequestChunks(users []uint64) (chunks [][]uint64, err error) {
 		return
 	}
 	chunks = make([][]uint64, 0)
-	for offset := 0; offset*MaxVkUserRequestBatchSize < len(users); offset += MaxVkUserRequestBatchSize {
+	for offset := 0; offset < len(users); offset += MaxVkUserRequestBatchSize {
 		chunks = append(chunks, users[offset:min(offset+MaxVkUserRequestBatchSize, len(users))])
 	}
 	return
