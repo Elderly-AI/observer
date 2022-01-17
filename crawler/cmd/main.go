@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/go-vk-api/vk"
 	"log"
 	"net"
 	"net/http"
@@ -9,12 +10,18 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 
-	crawler "github.com/Elderly-AI/observer/crawler/internal/app/crawler"
+	iCrawler "github.com/Elderly-AI/observer/crawler/internal/app/crawler"
+	fCrawler "github.com/Elderly-AI/observer/crawler/internal/pkg/crawler"
 	pbCrawler "github.com/Elderly-AI/observer/crawler/pkg/proto/crawler"
 )
 
 func registerServices(s *grpc.Server) {
-	crawlerImplementation := crawler.New()
+	vkClient, err := vk.NewClient()
+	if err != nil {
+		log.Fatalln("Failed to init vk client:", err)
+	}
+	crawlerFacade := fCrawler.New(vkClient)
+	crawlerImplementation := iCrawler.New(crawlerFacade)
 	pbCrawler.RegisterCrawlerServer(s, &crawlerImplementation)
 }
 

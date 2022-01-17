@@ -7,9 +7,11 @@ type VkClientFacade interface {
 }
 
 type Facade struct {
-	vkClient VkClientFacade
+	VkClient VkClientFacade
 }
 
 func New(vkClient VkClientFacade) *Facade {
-	return &Facade{}
+	return &Facade{
+		VkClient: vkClient,
+	}
 }

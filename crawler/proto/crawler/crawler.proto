@@ -24,7 +24,8 @@ message GetVkUsersPhotosHandlerRequest {
 
 message GetVkUsersPhotosHandlerResponse {
   message UserPhotos {
-    repeated bytes photos = 1;
+    uint64 user = 1;
+    repeated bytes photos = 2;
   }
   repeated UserPhotos photos = 1;
 };

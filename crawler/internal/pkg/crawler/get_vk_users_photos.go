@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Elderly-AI/observer/crawler/internal/pkg/model"
 	"github.com/go-vk-api/vk"
+	"io"
+	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/Elderly-AI/observer/crawler/internal/pkg/model"
 )
 
 const MaxVkUsersCountRequest = 75
@@ -38,12 +41,84 @@ while (id_cnt < user_id_arr.length) {
 return users_photos;
 `
 
-func (f *Facade) GetVkUsersPhotosHandler(ctx context.Context, users []uint64) (urls [][]string, err error) {
-	chunks, err := getVkUsersRequestChunks(users)
+func (f *Facade) GetVkUsersPhotosHandler(ctx context.Context, users []uint64) (usersPhotos []model.UserPhotos, err error) {
+	vkUsersPhotos, err := f.getVkUsersProfilePhotosBatch(users)
 	if err != nil {
 		return
 	}
-	//TODO gorutine run
+	usersPhotos, err = f.downloadUsersPhoto(vkUsersPhotos)
+	return
+}
+
+func (f *Facade) downloadUsersPhoto(vkUsers []model.VkUser) (usersPhotos []model.UserPhotos, err error) {
+	usersPhotos = make([]model.UserPhotos, 0, len(vkUsers))
+	for _, vkUser := range vkUsers {
+		var userPhotos model.UserPhotos
+		userPhotos, err = f.downloadUserPhoto(vkUser)
+		if err != nil {
+			return
+		}
+		usersPhotos = append(usersPhotos, userPhotos)
+	}
+	return
+}
+
+func (f *Facade) downloadUserPhoto(vkUser model.VkUser) (userPhotos model.UserPhotos, err error) {
+	userPhotos.UserID = vkUser.UserID
+	userPhotos.Photos = make([][]byte, 0, len(vkUser.Photos))
+	for _, photoUrl := range vkUser.Photos {
+		var b []byte
+		b, err = f.downloadPhoto(photoUrl)
+		if err != nil {
+			return
+		}
+		userPhotos.Photos = append(userPhotos.Photos, b)
+	}
+	return
+}
+
+func (f *Facade) downloadPhoto(url string) ([]byte, error) {
+	response, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != 200 {
+		return nil, errors.New("error received non 200 response code")
+	}
+	b, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func (f *Facade) getVkUsersProfilePhotosBatch(users []uint64) ([]model.VkUser, error) { // TODO async
+	chunks, err := getVkUsersRequestChunks(users)
+	if err != nil {
+		return nil, err
+	}
+	usersPhotos := make([]model.VkUser, 0)
+	for _, chunk := range chunks {
+		var photos []model.VkUser
+		photos, err = f.getVkUsersProfilePhotos(chunk)
+		if err != nil {
+			return nil, err
+		}
+		usersPhotos = append(usersPhotos, photos...)
+	}
+	return usersPhotos, nil
+}
+
+func (f *Facade) getVkUsersProfilePhotos(users []uint64) (usersProfilePhotos []model.VkUser, err error) {
+	if len(users) > MaxVkUserRequestBatchSize {
+		return nil, errors.New("error to many users in batch")
+	}
+	execCode := fmt.Sprintf(code, Uint64ArrToString(users))
+	err = f.VkClient.CallMethod("execute", vk.RequestParams{
+		"code": execCode,
+	}, &usersProfilePhotos)
+	return usersProfilePhotos, err
 }
 
 func getVkUsersRequestChunks(users []uint64) (chunks [][]uint64, err error) {
@@ -58,29 +133,17 @@ func getVkUsersRequestChunks(users []uint64) (chunks [][]uint64, err error) {
 	return
 }
 
-func min(a, b int) int {
-	if a <= b {
-		return a
-	}
-	return b
-}
-
-func (f *Facade) getUsersProfilePhotos(usersID []uint64) (usersProfilePhotos []model.VkUser, err error) {
-	if len(usersID) > MaxVkUserRequestBatchSize {
-		return nil, errors.New("batch size is too big")
-	}
-
-	execCode := fmt.Sprintf(code, Uint64ArrToString(usersID))
-	err = f.vkClient.CallMethod("execute", vk.RequestParams{
-		"code": execCode,
-	}, &usersProfilePhotos)
-	return usersProfilePhotos, err
-}
-
 func Uint64ArrToString(arr []uint64) string {
 	b := make([]string, len(arr))
 	for i, v := range arr {
 		b[i] = strconv.FormatUint(v, 10)
 	}
 	return strings.Join(b, ",")
+}
+
+func min(a, b int) int {
+	if a <= b {
+		return a
+	}
+	return b
 }
