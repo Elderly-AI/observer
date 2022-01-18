@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
+	"github.com/Elderly-AI/observer/crawler/internal/pkg/vk"
 	"log"
 	"net"
 	"net/http"
 
-	"github.com/go-vk-api/vk"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 
@@ -16,9 +16,7 @@ import (
 )
 
 func registerServices(s *grpc.Server) {
-	vkClient, err := vk.NewClientWithOptions(
-		vk.WithToken(""),
-	)
+	vkClient, err := vk.New("")
 	if err != nil {
 		log.Fatalln("Failed to init vk client:", err)
 	}

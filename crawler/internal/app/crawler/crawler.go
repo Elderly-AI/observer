@@ -7,16 +7,16 @@ import (
 	pb "github.com/Elderly-AI/observer/crawler/pkg/proto/crawler"
 )
 
-type CrawlerFacade interface {
+type Facade interface {
 	GetVkUsersPhotosHandler(ctx context.Context, users []uint64) (usersPhotos []model.UserPhotos, err error)
 }
 
 type Implementation struct {
 	pb.UnimplementedCrawlerServer
-	CrawlerFacade CrawlerFacade
+	CrawlerFacade Facade
 }
 
-func New(crawlerFacade CrawlerFacade) Implementation {
+func New(crawlerFacade Facade) Implementation {
 	return Implementation{
 		CrawlerFacade: crawlerFacade,
 	}

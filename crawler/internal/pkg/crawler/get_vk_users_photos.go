@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"github.com/Elderly-AI/observer/crawler/internal/pkg/model"
+	"github.com/Elderly-AI/observer/crawler/internal/pkg/vk"
 	"io"
 	"net/http"
+	"sync"
 )
 
 const MaxVkUsersCountRequest = 75
@@ -46,45 +48,84 @@ func (f *Facade) GetVkUsersPhotosHandler(ctx context.Context, users []uint64) (u
 	return
 }
 
-func (f *Facade) downloadUsersPhoto(vkUsers []model.VkUser) (usersPhotos []model.UserPhotos, err error) {
-	usersPhotos = make([]model.UserPhotos, 0, len(vkUsers))
+func (f *Facade) downloadUsersPhoto(vkUsers []vk.UserPhotos) (usersPhotos []model.UserPhotos, err error) {
+	var wg sync.WaitGroup
+	wg.Add(len(vkUsers))
+
+	buffer := make(chan model.UserPhotos, len(vkUsers))
+	errs := make(chan error, len(vkUsers))
+
 	for _, vkUser := range vkUsers {
-		var userPhotos model.UserPhotos
-		userPhotos, err = f.downloadUserPhoto(vkUser)
+		vkUserC := vkUser
+		go func() {
+			defer wg.Done()
+			f.downloadUserPhoto(vkUserC, buffer, errs)
+		}()
+	}
+
+	wg.Wait()
+	usersPhotos = make([]model.UserPhotos, len(vkUsers))
+	for i := 0; i < len(vkUsers); i++ {
+		err = <-errs
+		usersPhotos[i] = <-buffer
 		if err != nil {
 			return
 		}
-		usersPhotos = append(usersPhotos, userPhotos)
 	}
 	return
 }
 
-func (f *Facade) downloadUserPhoto(vkUser model.VkUser) (userPhotos model.UserPhotos, err error) {
-	userPhotos.UserID = vkUser.UserID
-	userPhotos.Photos = make([][]byte, 0, len(vkUser.Photos))
-	for _, photoUrl := range vkUser.Photos {
-		var b []byte
-		b, err = f.downloadPhoto(photoUrl)
+func (f *Facade) downloadUserPhoto(user vk.UserPhotos, userBuffer chan model.UserPhotos, userErrs chan error) {
+	var wg sync.WaitGroup
+	wg.Add(len(user.Photos))
+	var userPhotos model.UserPhotos
+	var err error
+
+	userPhotos.UserID = user.UserID
+	userPhotos.Photos = make([][]byte, 0, len(user.Photos))
+
+	buffer := make(chan []byte, len(user.Photos))
+	errs := make(chan error, len(user.Photos))
+	for _, photoUrl := range user.Photos {
+		photoUrlC := photoUrl
+		go func() {
+			defer wg.Done()
+			f.downloadPhoto(photoUrlC, buffer, errs)
+		}()
+	}
+
+	wg.Wait()
+	for i := 0; i < len(user.Photos); i++ {
+		err = <-errs
 		if err != nil {
+			userBuffer <- userPhotos
+			userErrs <- err
 			return
 		}
+		b := <-buffer
 		userPhotos.Photos = append(userPhotos.Photos, b)
 	}
+
+	userBuffer <- userPhotos
+	userErrs <- err
 	return
 }
 
-func (f *Facade) downloadPhoto(url string) ([]byte, error) {
+func (f *Facade) downloadPhoto(url string, buffer chan []byte, errs chan error) {
 	response, err := http.Get(url)
 	if err != nil {
-		return nil, err
+		buffer <- nil
+		errs <- err
+		return
 	}
 	defer response.Body.Close()
 	if response.StatusCode != 200 {
-		return nil, errors.New("error received non 200 response code")
+		buffer <- nil
+		errs <- errors.New("error received non 200 response code")
+		return
 	}
 	b, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
+	buffer <- b
+	errs <- err
+	return
 }

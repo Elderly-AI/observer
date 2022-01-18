@@ -5,25 +5,61 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	vkLib "github.com/go-vk-api/vk"
 )
 
-func (v *Vk) GetUsersPhotos(users []uint64) ([]User, error) {
+// TODO Причесать ассинхронность
+func (v *Vk) GetUsersPhotos(users []uint64) ([]UserPhotos, error) {
 	chunks, err := getVkUsersRequestChunks(users)
 	if err != nil {
 		return nil, err
 	}
-	usersPhotos := make([]User, 0)
+
+	var wg sync.WaitGroup
+	wg.Add(len(chunks))
+
+	buffer := make(chan []User, len(chunks))
+	errs := make(chan error, len(chunks))
+
 	for _, chunk := range chunks {
-		var photos []User
-		photos, err = v.getVkUsersProfilePhotos(chunk)
+		chunkC := chunk
+		go func() {
+			v.getVkUsersProfilePhotos(chunkC, buffer, errs)
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+	usersPhotos := make([]User, 0, len(chunks))
+	for i := 0; i < len(chunks); i++ {
+		err = <-errs
+		usersPhotos = append(usersPhotos, <-buffer...)
 		if err != nil {
 			return nil, err
 		}
-		usersPhotos = append(usersPhotos, photos...)
 	}
-	return usersPhotos, nil
+
+	return filterUsersPhotos(usersPhotos), nil
+}
+
+func filterUsersPhotos(users []User) []UserPhotos {
+	usersPhotos := make([]UserPhotos, len(users))
+	for i, user := range users {
+		usersPhotos[i].Photos = make([]string, len(user.Photos))
+		usersPhotos[i].UserID = user.UserID
+		for j, photo := range user.Photos {
+			var max = ""
+			for _, size := range photo.Sizes {
+				if size.Type > max {
+					usersPhotos[i].Photos[j] = size.Url
+					max = size.Type
+				}
+			}
+		}
+	}
+	return usersPhotos
 }
 
 func getVkUsersRequestChunks(users []uint64) (chunks [][]uint64, err error) {
@@ -38,15 +74,21 @@ func getVkUsersRequestChunks(users []uint64) (chunks [][]uint64, err error) {
 	return
 }
 
-func (v *Vk) getVkUsersProfilePhotos(users []uint64) (usersProfilePhotos []User, err error) {
+func (v *Vk) getVkUsersProfilePhotos(users []uint64, usersPhotos chan []User, errs chan error) {
+	var usersProfilePhotos []User
+	var err error
+
 	if len(users) > MaxVkUserRequestBatchSize {
-		return nil, errors.New("error to many users in batch")
+		usersPhotos <- nil
+		errs <- errors.New("error to many users in batch")
 	}
 	execCode := fmt.Sprintf(code, Uint64ArrToString(users))
 	err = v.Client.CallMethod("execute", vkLib.RequestParams{
 		"code": execCode,
 	}, &usersProfilePhotos)
-	return usersProfilePhotos, err
+
+	usersPhotos <- usersProfilePhotos
+	errs <- err
 }
 
 func Uint64ArrToString(arr []uint64) string {
