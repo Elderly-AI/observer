@@ -1,17 +1,13 @@
 package crawler
 
-import "github.com/go-vk-api/vk"
-
-type VkClientFacade interface {
-	CallMethod(method string, params vk.RequestParams, response interface{}) error
-}
+import "github.com/Elderly-AI/observer/crawler/internal/pkg/vk"
 
 type Facade struct {
-	VkClient VkClientFacade
+	Vk vk.Vk
 }
 
-func New(vkClient VkClientFacade) *Facade {
+func New(Vk vk.Vk) *Facade {
 	return &Facade{
-		VkClient: vkClient,
+		Vk: Vk,
 	}
 }
